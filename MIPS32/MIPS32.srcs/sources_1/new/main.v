@@ -19,18 +19,15 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module mips_core(clock);
+module mips32(clk);
 
-	input clock;
+	input clk;
 	
-	// Program counter
-	reg[31:0] PC = 32'b0;
-	
-	// Intruction
+	reg[31:0] pc = 32'b0;
 	wire [31:0] instruction;
 	
 	// Parse instruction
-	wire [5:0] funct;
+	wire [5:0] func;
 	wire [4:0] rs, rt, rd, shamt;
 	wire [25:0] address;
 	wire [15:0] immediate;
@@ -42,46 +39,53 @@ module mips_core(clock);
 	wire branch_signal;
 	
 	// Registers contents
-	wire [31:0] write_data, rs_content, rt_content, memory_read_data;
+	wire [31:0] data, rs_content, rt_content, memory_read_data;
 	
 	
 	// Read the instruction
-	read_instructions inst_mem (instruction, PC);
+	read_instruction inst_read (instruction, pc);
 	
-	inst_parser parse (opcode, rs, rt, rd, shamt, funct, immediate, address, instruction, PC);
+	inst_parser parse (opcode, rs, rt, rd, shamt, func, immediate, address, instruction,
+	                              pc);
 	
-	control_unit signals (read_reg_signal, write_reg_signal,read_mem_signal, write_mem_signal, regDst_signal, 
-								 branch_signal, opcode, funct);
+	control_unit cu (read_reg_signal, write_reg_signal,read_mem_signal, write_mem_signal, regDst_signal, 
+								 branch_signal, opcode, func);
 								 
-	ALU32bit alu_process (write_data, branch_signal, opcode, rs_content, rt_content, shamt, funct, immediate);
+	alu_unit alu (data, branch_signal, opcode, rs_content, rt_content, shamt, func, immediate);
 	
-	read_data_memory dataMemory (memory_read_data, write_data, rt_content, opcode, read_mem_signal, write_mem_signal);
+	read_data rw (memory_read_data, data, rt_content, opcode, read_mem_signal, write_mem_signal);
 	
-	read_registers contents (rs_content, rt_content, write_data, rs, rt, rd, opcode, 
-									read_reg_signal, write_reg_signal, regDst_signal, clock);
+	read_register content (rs_content, rt_content, data, rs, rt, rd, opcode, 
+									read_reg_signal, write_reg_signal, regDst_signal, clk);
 	
 	// PC operations
-	always @(posedge clock) begin 
-		// jump 
-		if(opcode == 6'h2) begin
-			PC = address;
-		end
-		// jr
-		else if(opcode == 6'h0 & funct == 6'h08)begin
-			PC = rs_content;
-		end
-		// branch
-		else if(write_data == 0 & branch_signal == 1) begin
-			PC = PC + 1 + $signed(immediate); 
-		end
-		else begin
-			PC = PC+1;
-		end
+	always @(posedge clk) 
+        begin 
+            // jump 
+            if(opcode == 6'h2)
+                begin
+                    pc = address;
+                end
+            // jr
+            else if(opcode == 6'h0 & func == 6'h08)
+                begin
+                    pc = rs_content;
+                end
+            // branch
+            else if(data == 0 & branch_signal == 1)
+                begin
+                    pc = pc + 1 + $signed(immediate); 
+                end
+            // incr pc 
+            else 
+                begin
+                    pc = pc+1;
+                end
 	end 
 	
-//	initial begin
-//		$monitor("instruction: %32b, PC: %32b\n",
-//		instruction, PC);
-//	end
+    //	initial begin
+    //		$monitor("instruction: %32b, PC: %32b\n",
+    //		instruction, PC);
+    //	end
 	
 endmodule
